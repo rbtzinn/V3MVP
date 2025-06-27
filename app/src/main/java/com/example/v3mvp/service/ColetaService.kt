@@ -2,117 +2,143 @@ package com.example.v3mvp.service
 
 import android.app.Service
 import android.content.Intent
-import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.location.LocationManager
-import android.os.Build
 import android.os.IBinder
+import android.os.Build
+import android.provider.Settings
+import android.content.Context
 import android.util.Log
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Environment
 import com.example.v3mvp.data.AppDatabase
 import com.example.v3mvp.model.Coleta
 import kotlinx.coroutines.*
-import android.provider.Settings
-import androidx.annotation.RequiresApi
-
+import kotlinx.coroutines.tasks.await
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
+import com.google.android.gms.location.LocationServices
 
 class ColetaService : Service(), SensorEventListener {
 
-    private val scope = CoroutineScope(Dispatchers.IO + Job())
-    private lateinit var sensorManager: SensorManager
-    private lateinit var locationManager: LocationManager
+    companion object {
+        const val ACTION_COLETAR_AGORA = "ACTION_COLETAR_AGORA"
+        const val ACTION_UPDATE_INTERVAL = "ACTION_UPDATE_INTERVAL"
+        const val EXTRA_INTERVAL = "EXTRA_INTERVAL"
+    }
 
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private lateinit var sensorManager: SensorManager
     private var lastGyro: FloatArray? = null
+    private var intervalo: Long = 10_000L // padrão: 10s
+    private var coletaJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
-
         criarNotificacaoForeground()
-
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-
         val gyro = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
         sensorManager.registerListener(this, gyro, SensorManager.SENSOR_DELAY_NORMAL)
-
-        scope.launch {
-            while (isActive) {
-                coletarDados()
-                delay(10_000)
-            }
-        }
+        iniciarLoopAutomatico()
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_COLETAR_AGORA -> {
+                val fotoPath = intent.getStringExtra("fotoPath")
+                scope.launch { acionarColetaComFoto(fotoPath) }
+            }
+            ACTION_UPDATE_INTERVAL -> {
+                val novoIntervalo = intent.getLongExtra(EXTRA_INTERVAL, 10_000L)
+                intervalo = novoIntervalo
+                reiniciarLoopAutomatico()
+            }
+            else -> {}
+        }
+        return START_STICKY
+    }
+
     private fun criarNotificacaoForeground() {
         val canalId = "canal_coleta"
-        val nome = "Coleta de Dados"
-        val descricao = "Serviço que coleta dados em segundo plano"
-
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val canal = android.app.NotificationChannel(
-                canalId,
-                nome,
-                android.app.NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = descricao
-            }
+            val canal = NotificationChannel(canalId, "Coleta de Dados", NotificationManager.IMPORTANCE_LOW)
             manager.createNotificationChannel(canal)
         }
-
-        val notificacao = android.app.Notification.Builder(this, canalId)
+        val notificacao = Notification.Builder(this, canalId)
             .setContentTitle("Coleta de dados ativa")
             .setContentText("O app está coletando dados em segundo plano.")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .build()
-
         startForeground(1, notificacao)
     }
 
+    private fun iniciarLoopAutomatico() {
+        coletaJob?.cancel()
+        coletaJob = scope.launch {
+            while (isActive) {
+                acionarColetaSemFoto() // coleta automática sem foto
+                delay(intervalo)
+            }
+        }
+    }
 
-    private fun coletarDados() {
+    private fun reiniciarLoopAutomatico() {
+        coletaJob?.cancel()
+        iniciarLoopAutomatico()
+    }
+
+    // Coleta automática (de 10 em 10s, sem foto)
+    private suspend fun acionarColetaSemFoto() {
+        salvarColeta(null)
+    }
+
+    // Coleta manual (com foto)
+    private suspend fun acionarColetaComFoto(fotoPath: String?) {
+        salvarColeta(fotoPath)
+    }
+
+    // Lógica de coleta (chamada por ambos)
+    private suspend fun salvarColeta(fotoPath: String?) {
+        val fused = LocationServices.getFusedLocationProviderClient(this)
         try {
-            val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-
-            val deviceId = Settings.Secure.getString(
-                contentResolver,
-                Settings.Secure.ANDROID_ID
-            )
-
+            val location = withContext(Dispatchers.Main) { fused.lastLocation.await() }
+            if (location == null || location.latitude == 0.0 || location.longitude == 0.0) {
+                Log.d("ColetaService", "Localização inválida, coleta descartada.")
+                return
+            }
+            val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             val coleta = Coleta(
                 timestamp = System.currentTimeMillis(),
-                latitude = location?.latitude,
-                longitude = location?.longitude,
+                latitude = location.latitude,
+                longitude = location.longitude,
                 gyroX = lastGyro?.getOrNull(0),
                 gyroY = lastGyro?.getOrNull(1),
                 gyroZ = lastGyro?.getOrNull(2),
-                deviceId = deviceId // 👈 novo dado incluído
+                deviceId = deviceId,
+                fotoPath = fotoPath
             )
-
             val db = AppDatabase.getInstance(applicationContext)
             val coletaDao = db.coletaDao()
-
-            scope.launch {
-                coletaDao.inserir(coleta)
-            }
-
+            coletaDao.inserir(coleta)
             Log.d("ColetaService", "Coleta salva: $coleta")
         } catch (e: Exception) {
             Log.e("ColetaService", "Erro ao salvar coleta", e)
         }
     }
 
-
-
     override fun onDestroy() {
-        super.onDestroy()
+        coletaJob?.cancel()
         scope.cancel()
         sensorManager.unregisterListener(this)
+        super.onDestroy()
     }
+
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -121,6 +147,5 @@ class ColetaService : Service(), SensorEventListener {
             lastGyro = event.values.clone()
         }
     }
-
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }

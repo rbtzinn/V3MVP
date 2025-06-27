@@ -13,8 +13,17 @@ interface ColetaDao {
     @Query("SELECT * FROM coleta ORDER BY timestamp DESC")
     suspend fun buscarTodas(): List<Coleta>
 
+    @Query("SELECT * FROM coleta ORDER BY timestamp DESC")
+    fun observarTodas(): androidx.lifecycle.LiveData<List<Coleta>> // <--- AQUI
+
     @Query("DELETE FROM coleta")
     suspend fun deletarTodas()
 
+    @Query("SELECT * FROM coleta WHERE enviado = 0")
+    suspend fun buscarNaoEnviadas(): List<Coleta>
+
+    @Query("UPDATE coleta SET enviado = :enviado WHERE id = :id")
+    suspend fun atualizarEnvio(id: Long, enviado: Boolean)
 }
+
 

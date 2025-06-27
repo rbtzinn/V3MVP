@@ -12,5 +12,7 @@ data class Coleta(
     val gyroX: Float?,
     val gyroY: Float?,
     val gyroZ: Float?,
-    val deviceId: String
+    val deviceId: String?,
+    val fotoPath: String?,
+    val enviado: Boolean = false
 )
