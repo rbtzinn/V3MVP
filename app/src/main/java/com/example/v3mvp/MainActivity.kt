@@ -170,12 +170,6 @@ class MainActivity : AppCompatActivity() {
             iniciarServico()
         }
     }
-
-    private fun isGpsAtivo(): Boolean {
-        val locationManager = getSystemService(LOCATION_SERVICE) as android.location.LocationManager
-        return locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)
-    }
-
     private fun iniciarServico() {
         val intent = Intent(this, ColetaService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
