@@ -1,54 +1,91 @@
-// FotoActivity.kt
 package com.example.v3mvp
 
-import android.content.Intent
-import android.graphics.Bitmap
 import android.os.Bundle
-import android.provider.MediaStore
-import android.widget.Toast
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
-import androidx.lifecycle.lifecycleScope
-import com.example.v3mvp.util.FaceDetectorUtil
-import kotlinx.coroutines.launch
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.content.ContextCompat
+import com.example.v3mvp.data.AppDatabase
+import com.example.v3mvp.model.Coleta
+import kotlinx.coroutines.*
+import kotlinx.coroutines.tasks.await
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 
 class FotoActivity : AppCompatActivity() {
 
-    private var fotoPath: String? = null
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        abrirCamera()
+        capturarFoto()
     }
 
-    private fun abrirCamera() {
-        val nomeArquivo = "FOTO_${System.currentTimeMillis()}.jpg"
-        val arquivo = File(getExternalFilesDir(null), nomeArquivo)
-        fotoPath = arquivo.absolutePath
+    private fun capturarFoto() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
-        val fotoUri = FileProvider.getUriForFile(
-            this, "${packageName}.provider", arquivo
-        )
-        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-        intent.putExtra(MediaStore.EXTRA_OUTPUT, fotoUri)
-        startActivityForResult(intent, 101)
-    }
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+            val imageCapture = ImageCapture.Builder().build()
+            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 101 && resultCode == RESULT_OK) {
-            val bitmap = FaceDetectorUtil.lerBitmap(this, fotoPath)
-            lifecycleScope.launch {
-                // **VALIDAÇÃO DE ROSTO**:
-                val temRosto = FaceDetectorUtil.temRosto(this@FotoActivity, bitmap)
-                if (temRosto) {
-                    Toast.makeText(this@FotoActivity, "Rosto detectado!", Toast.LENGTH_SHORT).show()
-                    // Aqui você pode acionar o Service para coletar os dados,
-                    // enviando o caminho da foto junto via Intent extra
-                } else {
-                    Toast.makeText(this@FotoActivity, "Sem rosto!", Toast.LENGTH_SHORT).show()
+            cameraProvider.unbindAll()
+            cameraProvider.bindToLifecycle(this, cameraSelector, imageCapture)
+
+            // Agora salva na pasta externa Pictures
+            val fotoFile = File(
+                getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES),
+                "FOTO_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.jpg"
+            )
+            val outputOptions = ImageCapture.OutputFileOptions.Builder(fotoFile).build()
+
+            imageCapture.takePicture(
+                outputOptions,
+                ContextCompat.getMainExecutor(this),
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                        salvarColeta(fotoFile.absolutePath)
+                    }
+
+                    override fun onError(exc: ImageCaptureException) {
+                        Log.e("FotoActivity", "Erro ao capturar foto", exc)
+                        finish()
+                    }
                 }
+            )
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun salvarColeta(fotoPath: String) {
+        scope.launch {
+            try {
+                val fused = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this@FotoActivity)
+                val location = withContext(Dispatchers.Main) { fused.lastLocation.await() }
+
+                if (location == null || (location.latitude == 0.0 && location.longitude == 0.0)) {
+                    Log.e("FotoActivity", "Localização inválida. Coleta descartada.")
+                    finish()
+                    return@launch
+                }
+
+                val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+                val coleta = Coleta(
+                    timestamp = System.currentTimeMillis(),
+                    latitude = location.latitude,
+                    longitude = location.longitude,
+                    gyroX = null, gyroY = null, gyroZ = null,
+                    deviceId = deviceId,
+                    fotoPath = fotoPath
+                )
+                val db = AppDatabase.getInstance(applicationContext)
+                db.coletaDao().inserir(coleta)
+                Log.d("FotoActivity", "Coleta com foto salva: $coleta")
+            } catch (e: Exception) {
+                Log.e("FotoActivity", "Erro ao salvar coleta com foto", e)
+            } finally {
+                finish()
             }
         }
     }

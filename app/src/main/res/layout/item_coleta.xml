@@ -1,14 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:card_view="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="12dp">
+    android:layout_margin="8dp"
+    card_view:cardCornerRadius="12dp"
+    card_view:cardElevation="6dp">
 
-    <TextView
-        android:id="@+id/txtDados"
+
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Dados"
-        android:textAppearance="?android:attr/textAppearanceMedium" />
-</LinearLayout>
+        android:padding="16dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/txtDados"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Informações da Coleta"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:textColor="#333"/>
+
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

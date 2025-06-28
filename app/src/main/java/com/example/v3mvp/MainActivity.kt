@@ -1,6 +1,8 @@
 package com.example.v3mvp
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -21,6 +23,10 @@ import com.example.v3mvp.viewmodel.ColetaViewModel
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import android.os.Handler
+import android.os.Looper
+import android.content.IntentFilter
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,6 +39,14 @@ class MainActivity : AppCompatActivity() {
 
     private var fotoPath: String? = null
     private val REQUEST_FOTO = 1002
+    private var pedirFotoDepoisPermissao = false
+
+    private val erroReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val msg = intent?.getStringExtra("mensagem") ?: "Erro desconhecido na coleta"
+            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,19 +68,43 @@ class MainActivity : AppCompatActivity() {
             adapter.submitList(it)
         }
 
-        // Botões
+        // Botão Exportar
         btnExportar.setOnClickListener {
             Exportador.exportarColetas(this, viewModel.coletas.value ?: emptyList())
         }
+        // Botão Limpar
         btnLimpar.setOnClickListener {
             viewModel.limparColetas()
         }
+
+        // Botão Coletar Agora
         btnColetarAgora.setOnClickListener {
-            if (!isGpsAtivo()) {
-                Toast.makeText(this, "Ative o GPS!", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+            val precisaDePermissaoLocalizacao =
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+
+            val precisaDePermissaoCamera =
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
+
+            val permissoesFaltando = mutableListOf<String>()
+            if (precisaDePermissaoLocalizacao) {
+                permissoesFaltando.add(Manifest.permission.ACCESS_FINE_LOCATION)
             }
-            abrirCameraParaFoto()
+            if (precisaDePermissaoCamera) {
+                permissoesFaltando.add(Manifest.permission.CAMERA)
+            }
+
+            if (permissoesFaltando.isNotEmpty()) {
+                pedirFotoDepoisPermissao = true
+                ActivityCompat.requestPermissions(this, permissoesFaltando.toTypedArray(), 100)
+            } else {
+                abrirCameraParaFoto()
+
+            }
+            registerReceiver(
+                erroReceiver,
+                IntentFilter("com.example.v3mvp.LOCATION_ERROR"),
+                Context.RECEIVER_NOT_EXPORTED
+            )
         }
 
         checarPermissoes()
@@ -112,17 +150,24 @@ class MainActivity : AppCompatActivity() {
     private fun checarPermissoes() {
         val permissoes = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.FOREGROUND_SERVICE,
+            Manifest.permission.FOREGROUND_SERVICE_LOCATION,
             Manifest.permission.CAMERA
         )
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             permissoes.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         }
-        if (permissoes.all {
-                ActivityCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-            }) {
-            iniciarServico()
+
+        val faltando = permissoes.filter {
+            ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (faltando.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, faltando.toTypedArray(), 100)
         } else {
-            ActivityCompat.requestPermissions(this, permissoes.toTypedArray(), 100)
+            iniciarServico()
         }
     }
 
@@ -146,8 +191,23 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
         if (requestCode == 100 && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-            iniciarServico()
+            Handler(Looper.getMainLooper()).postDelayed({
+                iniciarServico()
+                if (pedirFotoDepoisPermissao) {
+                    pedirFotoDepoisPermissao = false
+                    abrirCameraParaFoto()
+                }
+            }, 1000) // Espera 1 segundo antes de iniciar o serviço
+        } else {
+            Toast.makeText(this, "Permissões necessárias não concedidas", Toast.LENGTH_LONG).show()
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterReceiver(erroReceiver)
+    }
+
 }

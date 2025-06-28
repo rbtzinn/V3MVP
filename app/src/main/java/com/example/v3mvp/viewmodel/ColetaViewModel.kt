@@ -19,34 +19,5 @@ class ColetaViewModel(app: Application) : AndroidViewModel(app) {
             coletaDao.deletarTodas()
         }
     }
-
-    fun inserirColetasTeste() {
-        viewModelScope.launch {
-            val teste = listOf(
-                Coleta(
-                    timestamp = System.currentTimeMillis(),
-                    latitude = -8.06,
-                    longitude = -34.89,
-                    gyroX = 1.1f,
-                    gyroY = 2.2f,
-                    gyroZ = 3.3f,
-                    deviceId = "TEST-DEVICE-001",
-                    fotoPath = null
-                ),
-                Coleta(
-                    timestamp = System.currentTimeMillis(),
-                    latitude = -8.07,
-                    longitude = -34.88,
-                    gyroX = 1.2f,
-                    gyroY = 2.3f,
-                    gyroZ = 3.4f,
-                    deviceId = "TEST-DEVICE-001",
-                    fotoPath = null
-                ),
-            )
-            teste.forEach { coletaDao.inserir(it) }
-            // também não precisa chamar carregarColetas()
-        }
-    }
 }
 

@@ -16,3 +16,4 @@ data class Coleta(
     val fotoPath: String?,
     val enviado: Boolean = false
 )
+
