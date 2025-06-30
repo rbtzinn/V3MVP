@@ -70,23 +70,37 @@ class FotoActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
-                val coleta = Coleta(
-                    timestamp = System.currentTimeMillis(),
-                    latitude = location.latitude,
-                    longitude = location.longitude,
-                    gyroX = null, gyroY = null, gyroZ = null,
-                    deviceId = deviceId,
-                    fotoPath = fotoPath
-                )
-                val db = AppDatabase.getInstance(applicationContext)
-                db.coletaDao().inserir(coleta)
-                Log.d("FotoActivity", "Coleta com foto salva: $coleta")
+                // Detectar rosto na foto
+                withContext(Dispatchers.Main) {
+                    com.example.v3mvp.util.FaceDetectorUtil.validarFotoContemRosto(
+                        this@FotoActivity, fotoPath
+                    ) { temRosto ->
+                        val status = if (temRosto) "OK" else "FOTO SEM ROSTO"
+
+                        scope.launch {
+                            val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+                            val coleta = Coleta(
+                                timestamp = System.currentTimeMillis(),
+                                latitude = location.latitude,
+                                longitude = location.longitude,
+                                gyroX = null, gyroY = null, gyroZ = null,
+                                deviceId = deviceId,
+                                fotoPath = if (temRosto) fotoPath else null, // só salva path se tiver rosto
+                                status = status,
+                                enviado = false
+                            )
+                            val db = AppDatabase.getInstance(applicationContext)
+                            db.coletaDao().inserir(coleta)
+                            Log.d("FotoActivity", "Coleta com foto salva: $coleta")
+                            finish()
+                        }
+                    }
+                }
             } catch (e: Exception) {
                 Log.e("FotoActivity", "Erro ao salvar coleta com foto", e)
-            } finally {
                 finish()
             }
         }
     }
+
 }

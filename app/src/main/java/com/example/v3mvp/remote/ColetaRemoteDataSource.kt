@@ -3,7 +3,6 @@ package com.example.v3mvp.remote
 import com.example.v3mvp.api.ColetaRequest
 import com.example.v3mvp.api.GPS
 import com.example.v3mvp.api.Giroscopio
-import com.example.v3mvp.api.RetrofitClient
 import com.example.v3mvp.model.Coleta
 import okhttp3.ResponseBody
 import retrofit2.Call
@@ -32,7 +31,9 @@ object ColetaRemoteDataSource {
             fotoBase64 = fotoBase64
         )
 
-        RetrofitClient.apiService.enviarColeta(request)
+        val service = RetrofitInstance.retrofit.create(ApiService::class.java)
+
+        service.enviarColeta(request)
             .enqueue(object : Callback<ResponseBody> {
                 override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
                     if (response.isSuccessful) {

@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.protobuf") version "0.9.4"
 }
 
 android {
@@ -47,11 +48,8 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.1")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
-    implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation ("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation ("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation ("com.google.mlkit:face-detection:16.1.5")
-    implementation ("com.squareup.retrofit2:retrofit:2.9.0")
     implementation ("com.squareup.retrofit2:converter-gson:2.9.0")
     val camerax_version = "1.3.0"
     implementation ("androidx.camera:camera-camera2:$camerax_version")
@@ -59,6 +57,7 @@ dependencies {
     implementation ("androidx.camera:camera-view:$camerax_version")
     implementation ("androidx.camera:camera-core:$camerax_version")
     implementation ("androidx.cardview:cardview:1.0.0")
+
 
 
 
@@ -80,6 +79,8 @@ dependencies {
 
     // Localização (Google Play Services)
     implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.protobuf:protobuf-javalite:3.25.3")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Testes
     testImplementation("junit:junit:4.13.2")
@@ -87,5 +88,20 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.05.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.25.3"
+    }
+    generateProtoTasks {
+        all().forEach { task ->
+            task.builtins {
+                create("java") {
+                    option("lite")
+                }
+            }
+        }
+    }
 }
 

@@ -8,7 +8,6 @@
     card_view:cardCornerRadius="12dp"
     card_view:cardElevation="6dp">
 
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -22,6 +21,16 @@
             android:text="Informações da Coleta"
             android:textAppearance="?android:attr/textAppearanceMedium"
             android:textColor="#333"/>
+
+        <TextView
+            android:id="@+id/txtStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Status"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:textStyle="bold"
+            android:textColor="#008000" /> <!-- Cor verde pra OK, vermelho no código pra 'sem rosto' -->
 
     </LinearLayout>
 </androidx.cardview.widget.CardView>

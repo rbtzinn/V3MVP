@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.v3mvp.model.Coleta
 
-@Database(entities = [Coleta::class], version = 3)
+@Database(entities = [Coleta::class], version = 5)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun coletaDao(): ColetaDao
 

@@ -100,13 +100,13 @@ class MainActivity : AppCompatActivity() {
                 abrirCameraParaFoto()
 
             }
-            registerReceiver(
-                erroReceiver,
-                IntentFilter("com.example.v3mvp.LOCATION_ERROR"),
-                Context.RECEIVER_NOT_EXPORTED
-            )
-        }
 
+        }
+        registerReceiver(
+            erroReceiver,
+            IntentFilter("com.example.v3mvp.LOCATION_ERROR"),
+            Context.RECEIVER_NOT_EXPORTED
+        );
         checarPermissoes()
     }
 
